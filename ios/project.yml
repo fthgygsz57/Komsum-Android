@@ -15,7 +15,9 @@ targets:
     sources:
       - Sources
     resources:
-      - Resources/Web
+      - ../app/src/main/assets/index.html
+      - ../app/src/main/assets/styles.css
+      - ../app/src/main/assets/app.js
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.komsum.mahalle
