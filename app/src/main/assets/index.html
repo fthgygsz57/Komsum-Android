@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#2f6a4e" />
+  <meta name="description" content="Komşum — mahalle topluluk ve dayanışma uygulaması" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Komşum" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>Komşum</title>
+</head>
+<body>
+  <div id="app-shell">
+    <header class="topbar">
+      <div class="brand-wrap">
+        <div class="brand-mark" aria-hidden="true">🏘️</div>
+        <div>
+          <div class="brand">Komşum</div>
+          <button id="neighborhoodButton" class="neighborhood-button" type="button" data-action="go-profile">Mahalleni ayarla</button>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" id="searchButton" type="button" aria-label="Ara" data-action="open-search">⌕</button>
+        <button class="icon-btn" id="themeButton" type="button" aria-label="Tema değiştir" data-action="toggle-theme">☾</button>
+      </div>
+    </header>
+
+    <main id="app" class="app-main" aria-live="polite"></main>
+
+    <nav class="bottom-nav" aria-label="Ana menü">
+      <a href="#/feed" data-route="feed" class="nav-item"><span>📰</span><small>Akış</small></a>
+      <a href="#/lend" data-route="lend" class="nav-item"><span>🔄</span><small>Ödünç</small></a>
+      <a href="#/market" data-route="market" class="nav-item"><span>🛍️</span><small>Pazar</small></a>
+      <a href="#/help" data-route="help" class="nav-item"><span>🤝</span><small>Yardım</small></a>
+      <a href="#/more" data-route="more" class="nav-item"><span>•••</span><small>Daha</small></a>
+    </nav>
+  </div>
+
+  <div id="modalRoot" class="modal-root" hidden></div>
+  <div id="toastRoot" class="toast-root" aria-live="assertive"></div>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
