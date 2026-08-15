@@ -1,4 +1,4 @@
-const CACHE_NAME = 'komsum-pwa-v1.0.1';
+const CACHE_NAME = 'komsum-pwa-v2.0.0';
 const APP_SHELL = [
   './',
   './index.html',
