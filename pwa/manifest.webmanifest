@@ -1,0 +1,20 @@
+{
+  "name": "Komşum — Mahalle Topluluk Platformu",
+  "short_name": "Komşum",
+  "description": "Mahalle topluluk ve dayanışma uygulaması",
+  "start_url": "./#/feed",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7f8f5",
+  "theme_color": "#2f6a4e",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "./assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
