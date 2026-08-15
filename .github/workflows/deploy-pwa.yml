@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - 'app/src/main/assets/**'
-      - 'app/src/main/res/drawable/ic_launcher.png'
       - 'pwa/**'
       - '.github/workflows/deploy-pwa.yml'
   workflow_dispatch:
@@ -37,8 +36,8 @@ jobs:
           cp app/src/main/assets/app.js _site/app.js
           cp pwa/manifest.webmanifest _site/manifest.webmanifest
           cp pwa/sw.js _site/sw.js
-          cp app/src/main/res/drawable/ic_launcher.png _site/assets/icon-512.png
-          cp app/src/main/res/drawable/ic_launcher.png _site/assets/icon-192.png
+          base64 -d pwa/icon-512.png.b64 > _site/assets/icon-512.png
+          cp _site/assets/icon-512.png _site/assets/icon-192.png
           touch _site/.nojekyll
 
       - name: Configure Pages
