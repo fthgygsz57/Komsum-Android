@@ -18,12 +18,12 @@
         <div class="brand-mark" aria-hidden="true">🏘️</div>
         <div>
           <div class="brand">Komşum</div>
-          <button id="neighborhoodButton" class="neighborhood-button" type="button" data-action="go-profile">Mahalleni ayarla</button>
+          <button id="neighborhoodButton" class="neighborhood-button" type="button">Bağlanıyor…</button>
         </div>
       </div>
       <div class="top-actions">
-        <button class="icon-btn" id="searchButton" type="button" aria-label="Ara" data-action="open-search">⌕</button>
-        <button class="icon-btn" id="themeButton" type="button" aria-label="Tema değiştir" data-action="toggle-theme">☾</button>
+        <button class="icon-btn" id="refreshButton" type="button" aria-label="Yenile">↻</button>
+        <button class="icon-btn" id="themeButton" type="button" aria-label="Tema değiştir">☾</button>
       </div>
     </header>
 
@@ -41,6 +41,7 @@
   <div id="modalRoot" class="modal-root" hidden></div>
   <div id="toastRoot" class="toast-root" aria-live="assertive"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.min.js"></script>
   <script src="./app.js" defer></script>
 </body>
 </html>
