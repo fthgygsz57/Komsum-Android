@@ -1,0 +1,32 @@
+name: Komsum
+options:
+  bundleIdPrefix: com.komsum
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
+targets:
+  Komsum:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - Sources
+    resources:
+      - Resources/Web
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.komsum.mahalle
+        PRODUCT_NAME: Komşum
+        MARKETING_VERSION: 1.0.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Resources/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+    scheme:
+      testTargets: []
