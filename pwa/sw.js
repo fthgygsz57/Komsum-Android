@@ -1,9 +1,10 @@
-const CACHE_NAME = 'komsum-pwa-v2.1.0';
+const CACHE_NAME = 'komsum-pwa-v2.2.0';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './location-selector.js',
   './manifest.webmanifest',
   './assets/icon-192.png',
   './assets/icon-512.png'
@@ -28,6 +29,9 @@ self.addEventListener('fetch', event => {
       const copy = response.clone();
       caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
       return response;
-    }).catch(() => caches.match('./index.html')))
+    }).catch(() => {
+      if (event.request.mode === 'navigate') return caches.match('./index.html');
+      throw new Error('network unavailable');
+    }))
   );
 });
