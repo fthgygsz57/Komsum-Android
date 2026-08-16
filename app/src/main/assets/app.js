@@ -3,6 +3,8 @@
 
 const SB_URL='https://verofwurljrefospefiz.supabase.co';
 const SB_KEY='sb_publishable_quKumiIdYiZSyNZsaCDcfQ_WSb-ASBC';
+const PTT_BASE='https://raw.githubusercontent.com/cyaxaress/turkiye-il-ilce-mah/main/PTT/iller';
+const locationCache={cities:null,districts:new Map(),neighborhoods:new Map()};
 const { createClient } = window.supabase || {};
 const app=document.getElementById('app');
 const modal=document.getElementById('modalRoot');
@@ -140,14 +142,109 @@ async function submitAuth(form){
   }
 }
 
+function locationJoinMarkup(prefix){
+  return `<form id="selectNeighborhood" data-prefix="${prefix}" class="form-grid">
+    <div class="field"><label>İl</label><select id="${prefix}City" required><option value="">İl seç</option></select></div>
+    <div class="field"><label>İlçe</label><select id="${prefix}District" required disabled><option value="">Önce il seç</option></select></div>
+    <div class="field"><label>Mahalle</label><select id="${prefix}Neighborhood" required disabled><option value="">Önce ilçe seç</option></select></div>
+    <button id="${prefix}JoinButton" class="primary-btn" disabled>Mahalleye Katıl</button>
+    <small class="hint">Mahalleler PTT adres verisinden seçilir. Aynı mahalleyi seçen kullanıcılar aynı topluluğa bağlanır.</small>
+  </form>`;
+}
+
+async function pttFetch(path){
+  const res=await fetch(`${PTT_BASE}/${path}`,{cache:'no-cache'});
+  if(!res.ok)throw new Error('Adres listesi alınamadı. İnternet bağlantını kontrol et.');
+  return res.json();
+}
+
+function resetSelect(select,label){
+  select.innerHTML='';
+  const opt=document.createElement('option'); opt.value=''; opt.textContent=label; select.appendChild(opt);
+  select.disabled=true;
+}
+
+async function initLocationSelectors(prefix){
+  const city=document.getElementById(prefix+'City');
+  const district=document.getElementById(prefix+'District');
+  const neighborhood=document.getElementById(prefix+'Neighborhood');
+  const button=document.getElementById(prefix+'JoinButton');
+  if(!city||!district||!neighborhood||!button)return;
+
+  try{
+    city.disabled=true;
+    const cities=locationCache.cities||(locationCache.cities=await pttFetch('iller.json'));
+    city.innerHTML='<option value="">İl seç</option>';
+    cities.forEach(row=>{
+      const opt=document.createElement('option');
+      opt.value=row.il_id; opt.textContent=row.il_adi; opt.dataset.slug=row.il_slug; opt.dataset.name=row.il_adi;
+      city.appendChild(opt);
+    });
+    city.disabled=false;
+
+    city.addEventListener('change',()=>safe(async()=>{
+      resetSelect(district,'İlçe seç'); resetSelect(neighborhood,'Önce ilçe seç'); button.disabled=true;
+      const selected=city.selectedOptions[0]; if(!selected?.value)return;
+      const slug=selected.dataset.slug;
+      let districts=locationCache.districts.get(slug);
+      if(!districts){districts=await pttFetch(`${slug}/ilceler.json`);locationCache.districts.set(slug,districts)}
+      district.innerHTML='<option value="">İlçe seç</option>';
+      districts.forEach(row=>{
+        const opt=document.createElement('option');
+        opt.value=row.ilce_id; opt.textContent=row.ilce_adi; opt.dataset.slug=row.ilce_slug; opt.dataset.name=row.ilce_adi;
+        district.appendChild(opt);
+      });
+      district.disabled=false;
+    }));
+
+    district.addEventListener('change',()=>safe(async()=>{
+      resetSelect(neighborhood,'Mahalle seç'); button.disabled=true;
+      const cityOpt=city.selectedOptions[0], districtOpt=district.selectedOptions[0];
+      if(!cityOpt?.value||!districtOpt?.value)return;
+      const key=`${cityOpt.dataset.slug}/${districtOpt.dataset.slug}`;
+      let neighborhoods=locationCache.neighborhoods.get(key);
+      if(!neighborhoods){neighborhoods=await pttFetch(`${key}/mahalleler.json`);locationCache.neighborhoods.set(key,neighborhoods)}
+      neighborhood.innerHTML='<option value="">Mahalle seç</option>';
+      neighborhoods.forEach(row=>{
+        const opt=document.createElement('option');
+        opt.value=row.mahalle_id; opt.textContent=row.mahalle_adi; opt.dataset.name=row.mahalle_adi; opt.dataset.postal=row.posta_kodu||'';
+        neighborhood.appendChild(opt);
+      });
+      neighborhood.disabled=false;
+    }));
+
+    neighborhood.addEventListener('change',()=>{button.disabled=!neighborhood.value});
+  }catch(err){
+    console.error(err); toast(err.message||'Adres listesi alınamadı');
+  }
+}
+
 function renderNeighborhoodSetup(){
   nav.style.display='none'; nb.textContent='Mahalle seçilmedi';
-  app.innerHTML=head('Mahalleni Kur','Yeni bir mahalle oluştur veya komşunun davet koduyla katıl')+`<div class="stack"><div class="card"><h3 class="card-title">Yeni mahalle oluştur</h3><form id="createNeighborhood" class="form-grid"><div class="field"><label>Mahalle / Site adı</label><input name="name" required maxlength="100" placeholder="Örn. Ataşehir Sitesi"></div><div class="form-row"><div class="field"><label>İl</label><input name="city" maxlength="80" placeholder="İstanbul"></div><div class="field"><label>İlçe</label><input name="district" maxlength="80" placeholder="Küçükçekmece"></div></div><button class="primary-btn">Mahalle Oluştur</button></form></div><div class="card"><h3 class="card-title">Davet koduyla katıl</h3><form id="joinNeighborhood" class="form-grid"><div class="field"><label>Davet Kodu</label><input name="code" required maxlength="20" autocapitalize="characters" placeholder="Örn. A1B2C3D4"></div><button class="secondary-btn">Mahalleye Katıl</button></form></div><button class="text-btn" data-a="logout">Çıkış Yap</button></div>`;
+  app.innerHTML=head('Mahalleni Seç','İl, ilçe ve mahalle seçerek topluluğuna katıl. Davet kodu varsa hızlı katılım da kullanabilirsin.')+`<div class="stack"><div class="card"><h3 class="card-title">Adresinden mahalle seç</h3>${locationJoinMarkup('setup')}</div><div class="card"><h3 class="card-title">Davet koduyla hızlı katıl</h3><form id="joinNeighborhood" class="form-grid"><div class="field"><label>Davet Kodu</label><input name="code" required maxlength="20" autocapitalize="characters" placeholder="Örn. A1B2C3D4"></div><button class="secondary-btn">Davet Koduyla Katıl</button></form></div><button class="text-btn" data-a="logout">Çıkış Yap</button></div>`;
+  setTimeout(()=>safe(()=>initLocationSelectors('setup')),0);
 }
-async function createNeighborhood(form){
-  const fd=new FormData(form); const {error}=await sb.rpc('create_neighborhood',{p_name:String(fd.get('name')).trim(),p_city:String(fd.get('city')).trim()||null,p_district:String(fd.get('district')).trim()||null});
-  if(error)throw error; toast('Mahalle oluşturuldu'); await boot((await sb.auth.getSession()).data.session);
+
+async function joinSelectedNeighborhood(form){
+  const prefix=form.dataset.prefix;
+  const city=document.getElementById(prefix+'City')?.selectedOptions[0];
+  const district=document.getElementById(prefix+'District')?.selectedOptions[0];
+  const neighborhood=document.getElementById(prefix+'Neighborhood')?.selectedOptions[0];
+  if(!city?.value||!district?.value||!neighborhood?.value)throw new Error('İl, ilçe ve mahalle seçmelisin.');
+  const {error}=await sb.rpc('join_neighborhood_by_ptt',{
+    p_il_id:city.value,
+    p_il_name:city.dataset.name,
+    p_ilce_id:district.value,
+    p_ilce_name:district.dataset.name,
+    p_mahalle_id:neighborhood.value,
+    p_mahalle_name:neighborhood.dataset.name,
+    p_posta_kodu:neighborhood.dataset.postal||null
+  });
+  if(error)throw error;
+  toast('Mahalleye katıldın');
+  await boot((await sb.auth.getSession()).data.session);
 }
+
 async function joinNeighborhood(form){
   const code=String(new FormData(form).get('code')).trim().toUpperCase(); const {error}=await sb.rpc('join_neighborhood',{p_invite_code:code});
   if(error)throw error; toast('Mahalleye katıldın'); await boot((await sb.auth.getSession()).data.session);
@@ -223,7 +320,10 @@ async function sendMessage(form){const body=String(new FormData(form).get('body'
 function profileEdit(){open('Profili Düzenle',`<form id="profileForm" class="form-grid"><div class="field"><label>Ad Soyad</label><input name="name" required maxlength="80" value="${e(state.profile?.full_name||'')}"></div><div class="field"><label>Telefon</label><input name="phone" inputmode="tel" maxlength="30" value="${e(state.profile?.phone||'')}"></div><div class="form-actions"><button type="button" class="secondary-btn" data-a="close">İptal</button><button class="primary-btn">Kaydet</button></div></form>`)}
 async function saveProfile(form){const fd=new FormData(form);const {error}=await sb.from('profiles').update({full_name:String(fd.get('name')).trim(),phone:String(fd.get('phone')||'').trim()||null,updated_at:new Date().toISOString()}).eq('id',state.user.id);if(error)throw error;close();await loadIdentity();render();toast('Profil güncellendi')}
 function switchNeighborhood(){open('Mahalle Değiştir',`<div class="settings-list">${state.memberships.map(m=>`<button class="setting-row" data-a="choose-neighborhood" data-id="${m.neighborhood_id}"><span>🏘️</span><span class="grow"><strong>${e(m.neighborhoods?.name||'Mahalle')}</strong><small>${e([m.neighborhoods?.district,m.neighborhoods?.city].filter(Boolean).join(' / '))}</small></span></button>`).join('')}</div><div class="section-title">Başka mahalle</div><button class="secondary-btn" data-a="join-more">Davet koduyla katıl</button>`)}
-function joinMore(){open('Davet Koduyla Katıl',`<form id="joinNeighborhood" class="form-grid"><div class="field"><label>Davet Kodu</label><input name="code" required maxlength="20" autocapitalize="characters"></div><div class="form-actions"><button type="button" class="secondary-btn" data-a="close">İptal</button><button class="primary-btn">Katıl</button></div></form>`)}
+function joinMore(){
+  open('Mahalleye Katıl',`<div class="stack"><div><h3 class="card-title">Adresinden mahalle seç</h3>${locationJoinMarkup('more')}</div><div class="section-title">veya davet kodu</div><form id="joinNeighborhood" class="form-grid"><div class="field"><label>Davet Kodu</label><input name="code" required maxlength="20" autocapitalize="characters"></div><button class="secondary-btn">Davet Koduyla Katıl</button></form></div>`);
+  setTimeout(()=>safe(()=>initLocationSelectors('more')),0);
+}
 async function chooseNeighborhood(id){const m=state.memberships.find(x=>x.neighborhood_id===id);if(!m)return;state.neighborhood=m.neighborhoods;close();await loadAll();subscribeRealtime();go('feed');render()}
 
 function applyTheme(v){document.documentElement.dataset.theme=v;localStorage.setItem('komsum.theme',v);if(themeBtn)themeBtn.textContent=v==='dark'?'☀':'☾'}
@@ -234,7 +334,7 @@ async function safe(fn){try{await fn()}catch(err){console.error(err);toast(err.m
 document.addEventListener('submit',ev=>{
   ev.preventDefault(); const f=ev.target;
   if(f.id==='authForm')return safe(()=>submitAuth(f));
-  if(f.id==='createNeighborhood')return safe(()=>createNeighborhood(f));
+  if(f.id==='selectNeighborhood')return safe(()=>joinSelectedNeighborhood(f));
   if(f.id==='joinNeighborhood')return safe(()=>joinNeighborhood(f));
   if(f.id==='entityForm')return safe(()=>saveEntity(f));
   if(f.id==='borrowForm')return safe(()=>submitBorrow(f));
