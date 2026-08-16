@@ -4,6 +4,7 @@
 const SB_URL='https://verofwurljrefospefiz.supabase.co';
 const SB_KEY='sb_publishable_quKumiIdYiZSyNZsaCDcfQ_WSb-ASBC';
 const APP_URL='https://fthgygsz57.github.io/Komsum-Android/';
+const VAPID_PUBLIC='BHMCmYMLVoz1o_sEhEMfONnKom1K2wpK3YroOhDugPYcX840tC5O636L_2xfmTVAZlwIa3USkUdLw7hM7xZd1gM';
 const PTT_BASE='https://raw.githubusercontent.com/cyaxaress/turkiye-il-ilce-mah/main/PTT/iller';
 const locationCache={cities:null,districts:new Map(),neighborhoods:new Map()};
 const { createClient } = window.supabase || {};
@@ -43,6 +44,43 @@ function conversationUnread(id){
   return state.messages.filter(m=>m.conversation_id===id&&m.sender_id!==state.user?.id&&new Date(m.created_at).getTime()>since).length;
 }
 const unreadMessages=()=>state.conversations.reduce((n,c)=>n+conversationUnread(c.id),0);
+
+function pushSupported(){return 'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window}
+function isIOS(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1)}
+function isStandalone(){return window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true}
+function pushStatusText(){if(!pushSupported())return 'Bu cihazda desteklenmiyor';if(Notification.permission==='denied')return 'İzin kapalı';if(Notification.permission==='granted')return 'Açık';return 'Kapalı'}
+function urlBase64ToUint8Array(base64String){const padding='='.repeat((4-base64String.length%4)%4),base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/'),raw=atob(base64),out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out}
+async function registerAppServiceWorker(){
+  if(!('serviceWorker' in navigator)||location.protocol!=='https:')return null;
+  try{return await navigator.serviceWorker.register('./sw.js',{scope:'./'})}catch(err){console.warn('Service worker kayıt hatası',err);return null}
+}
+function pushSettings(){
+  if(!pushSupported()){open('Telefon Bildirimleri','<div class="notice">Bu cihaz veya uygulama biçimi Web Push desteklemiyor. iPhone’da Komşum’u Ana Ekran’dan açmalısın.</div>');return}
+  const iosHint=isIOS()&&!isStandalone()?'<div class="notice">iPhone’da gerçek push için Komşum Safari’den <strong>Ana Ekrana Ekle</strong> ile kurulmalı ve uygulama Ana Ekrandaki simgeden açılmalı.</div>':'';
+  open('Telefon Bildirimleri',`${iosHint}<div class="notice"><strong>Durum:</strong> ${e(pushStatusText())}</div><div class="form-actions"><button class="primary-btn" data-a="push-enable">Bildirimleri Aç</button><button class="secondary-btn" data-a="push-disable">Bildirimleri Kapat</button></div><small class="hint">Yeni mesaj ve ödünç güncellemeleri uygulama kapalıyken de kilit ekranına gelebilir.</small>`)
+}
+async function enablePush(){
+  if(!pushSupported())throw new Error('Bu cihaz Web Push desteklemiyor.');
+  if(isIOS()&&!isStandalone())throw new Error('iPhone’da önce Komşum’u Ana Ekrana ekleyip oradaki simgeden açmalısın.');
+  const permission=await Notification.requestPermission();
+  if(permission!=='granted')throw new Error('Bildirim izni verilmedi. iPhone Ayarlar > Bildirimler > Komşum bölümünden de kontrol edebilirsin.');
+  await registerAppServiceWorker();
+  const reg=await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC)});
+  const json=sub.toJSON(),keys=json.keys||{};
+  if(!json.endpoint||!keys.p256dh||!keys.auth)throw new Error('Push aboneliği oluşturulamadı.');
+  const {error}=await sb.rpc('register_push_subscription',{p_endpoint:json.endpoint,p_p256dh:keys.p256dh,p_auth:keys.auth,p_platform:isIOS()?'ios-pwa':'web-pwa',p_user_agent:navigator.userAgent});
+  if(error)throw error;
+  close();render();toast('Telefon bildirimleri açıldı 🔔');
+}
+async function disablePush(){
+  if(!pushSupported()){close();return}
+  const reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();
+  if(sub){const endpoint=sub.endpoint;try{await sb.rpc('unregister_push_subscription',{p_endpoint:endpoint})}catch{}await sub.unsubscribe();}
+  close();render();toast('Telefon bildirimleri kapatıldı');
+}
+
 
 async function compressImage(file){
   if(!file||!file.size)return null;
@@ -367,7 +405,7 @@ function more(){
 }
 function profile(){
   const m=currentMembership();
-  app.innerHTML=head('Profil','Hesabın ve mahalle üyeliğin')+`<div class="card profile-card"><div class="profile-avatar">${e((state.profile?.full_name||'K')[0])}</div><div><strong>${e(state.profile?.full_name||'Komşu')}</strong><div class="meta">${e(state.user.email||'')}</div></div></div><div class="card"><h3 class="card-title">${e(state.neighborhood.name)}</h3><div class="card-text">${e([state.neighborhood.district,state.neighborhood.city].filter(Boolean).join(' / '))}</div><div class="notice"><strong>Davet Kodu:</strong> ${e(state.neighborhood.invite_code)}</div><div class="notice"><strong>Site:</strong> ${e(m?.residential_sites?.name||'Mahalle geneli')}</div></div><div class="settings-list"><button class="setting-row" data-a="site-change"><span>🏢</span><span class="grow"><strong>Site / Konut projesi</strong><small>${e(m?.residential_sites?.name||'Mahalle geneli')}</small></span></button><button class="setting-row" data-a="profile-edit"><span>✏️</span><span class="grow"><strong>Profili düzenle</strong><small>Ad ve telefon bilgisi</small></span></button><button class="setting-row" data-a="account-settings"><span>🔐</span><span class="grow"><strong>Hesap ve güvenlik</strong><small>Şifre, e-posta ve hesabı sil</small></span></button>${canModerate()?`<button class="setting-row" data-go="admin"><span>🛡️</span><span class="grow"><strong>Mahalle yönetimi</strong><small>${e(m?.role||'')}</small></span></button>`:''}<button class="setting-row" data-a="switch-neighborhood"><span>🏘️</span><span class="grow"><strong>Mahalle değiştir</strong><small>${state.memberships.length} üyelik · ${e(m?.role||'member')}</small></span></button><button class="setting-row" data-a="logout"><span>↪</span><span class="grow"><strong>Çıkış yap</strong><small>Bu cihazdaki oturumu kapat</small></span></button></div>`
+  app.innerHTML=head('Profil','Hesabın ve mahalle üyeliğin')+`<div class="card profile-card"><div class="profile-avatar">${e((state.profile?.full_name||'K')[0])}</div><div><strong>${e(state.profile?.full_name||'Komşu')}</strong><div class="meta">${e(state.user.email||'')}</div></div></div><div class="card"><h3 class="card-title">${e(state.neighborhood.name)}</h3><div class="card-text">${e([state.neighborhood.district,state.neighborhood.city].filter(Boolean).join(' / '))}</div><div class="notice"><strong>Davet Kodu:</strong> ${e(state.neighborhood.invite_code)}</div><div class="notice"><strong>Site:</strong> ${e(m?.residential_sites?.name||'Mahalle geneli')}</div></div><div class="settings-list"><button class="setting-row" data-a="site-change"><span>🏢</span><span class="grow"><strong>Site / Konut projesi</strong><small>${e(m?.residential_sites?.name||'Mahalle geneli')}</small></span></button><button class="setting-row" data-a="profile-edit"><span>✏️</span><span class="grow"><strong>Profili düzenle</strong><small>Ad ve telefon bilgisi</small></span></button><button class="setting-row" data-a="push-settings"><span>🔔</span><span class="grow"><strong>Telefon bildirimleri</strong><small>${e(pushStatusText())}</small></span></button><button class="setting-row" data-a="account-settings"><span>🔐</span><span class="grow"><strong>Hesap ve güvenlik</strong><small>Şifre, e-posta ve hesabı sil</small></span></button>${canModerate()?`<button class="setting-row" data-go="admin"><span>🛡️</span><span class="grow"><strong>Mahalle yönetimi</strong><small>${e(m?.role||'')}</small></span></button>`:''}<button class="setting-row" data-a="switch-neighborhood"><span>🏘️</span><span class="grow"><strong>Mahalle değiştir</strong><small>${state.memberships.length} üyelik · ${e(m?.role||'member')}</small></span></button><button class="setting-row" data-a="logout"><span>↪</span><span class="grow"><strong>Çıkış yap</strong><small>Bu cihazdaki oturumu kapat</small></span></button></div>`
 }
 function messagesPage(){
   const convs=state.conversations.map(c=>{const members=state.conversationMembers.filter(m=>m.conversation_id===c.id),other=members.find(m=>m.user_id!==state.user.id)?.profiles,msgs=state.messages.filter(m=>m.conversation_id===c.id),last=msgs[msgs.length-1],unread=conversationUnread(c.id);return {c,other,last,unread};}).sort((a,b)=>new Date(b.last?.created_at||b.c.created_at)-new Date(a.last?.created_at||a.c.created_at));
@@ -490,6 +528,7 @@ document.addEventListener('click',ev=>{
   if(a==='notifications-read-all')return safe(()=>markAllNotifications()); if(a==='notification-open')return safe(()=>openNotification(el.dataset.id));
   if(a==='admin-role')return safe(()=>adminSetRole(el.dataset.user,el.dataset.role)); if(a==='admin-remove')return safe(()=>adminRemove(el.dataset.user)); if(a==='admin-regenerate-code')return safe(()=>adminRegenerate()); if(a==='admin-site-review')return safe(()=>adminReviewSite(el.dataset.id,el.dataset.ok==='1'));
   if(a==='set-site')return safe(()=>setSiteChoice(el.dataset.nid,el.dataset.site||null)); if(a==='suggest-site')return suggestSite(el.dataset.nid); if(a==='site-change')return safe(()=>openSitePicker(state.neighborhood.id,false));
+  if(a==='push-settings')return pushSettings(); if(a==='push-enable')return safe(()=>enablePush()); if(a==='push-disable')return safe(()=>disablePush());
   if(a==='profile-edit')return profileEdit(); if(a==='account-settings')return accountSettings(); if(a==='change-password')return changePasswordForm(); if(a==='change-email')return changeEmailForm(); if(a==='delete-account')return deleteAccountForm();
   if(a==='switch-neighborhood')return switchNeighborhood(); if(a==='join-more')return joinMore(); if(a==='choose-neighborhood')return safe(()=>chooseNeighborhood(el.dataset.id));
   if(a==='logout')return safe(()=>sb.auth.signOut()); if(a==='retry')return safe(async()=>boot((await sb.auth.getSession()).data.session));
