@@ -1,4 +1,4 @@
-const CACHE_NAME = 'komsum-pwa-v3.0.0';
+const CACHE_NAME = 'komsum-pwa-v3.1.0';
 const APP_SHELL = [
   './',
   './index.html',
@@ -33,4 +33,40 @@ self.addEventListener('fetch', event => {
       return Response.error();
     }))
   );
+});
+
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+
+  const title = data.title || 'Komşum';
+  const options = {
+    body: data.body || 'Yeni bir bildirimin var.',
+    icon: './assets/icon-192.png',
+    badge: './assets/icon-192.png',
+    tag: data.notificationId ? `komsum-${data.notificationId}` : 'komsum-notification',
+    data: { url: data.url || './#/notifications' }
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = event.notification.data?.url || './#/notifications';
+
+  event.waitUntil((async () => {
+    const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      if ('navigate' in client) {
+        try { await client.navigate(target); } catch {}
+      }
+      if ('focus' in client) return client.focus();
+    }
+    return clients.openWindow ? clients.openWindow(target) : undefined;
+  })());
 });
