@@ -24,6 +24,7 @@ let state={user:null,profile:null,memberships:[],neighborhood:null,posts:[],item
 let realtime=null;
 let reloadTimer=null;
 let booting=false;
+let sitePickerContext={nid:null,afterJoin:false};
 
 const e=(v='')=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const route=()=>((location.hash||'#/feed').replace(/^#\/?/,'').split('?')[0]||'feed');
@@ -79,7 +80,7 @@ async function loadIdentity(){
   let {data:profile,error:pErr}=await sb.from('profiles').select('*').eq('id',uid).single();
   if(pErr)throw pErr;
   state.profile=profile;
-  let {data:members,error:mErr}=await sb.from('memberships').select('neighborhood_id,role,joined_at,neighborhoods(id,name,city,district,invite_code)').eq('user_id',uid).order('joined_at');
+  let {data:members,error:mErr}=await sb.from('memberships').select('neighborhood_id,role,joined_at,site_id,residential_sites!site_id(id,name,brand),neighborhoods(id,name,city,district,invite_code)').eq('user_id',uid).order('joined_at');
   if(mErr)throw mErr;
   state.memberships=members||[];
   if(state.neighborhood&&!state.memberships.some(m=>m.neighborhood_id===state.neighborhood.id)) state.neighborhood=null;
@@ -231,7 +232,7 @@ async function joinSelectedNeighborhood(form){
   const district=document.getElementById(prefix+'District')?.selectedOptions[0];
   const neighborhood=document.getElementById(prefix+'Neighborhood')?.selectedOptions[0];
   if(!city?.value||!district?.value||!neighborhood?.value)throw new Error('İl, ilçe ve mahalle seçmelisin.');
-  const {error}=await sb.rpc('join_neighborhood_by_ptt',{
+  const {data,error}=await sb.rpc('join_neighborhood_by_ptt',{
     p_il_id:city.value,
     p_il_name:city.dataset.name,
     p_ilce_id:district.value,
@@ -242,12 +243,50 @@ async function joinSelectedNeighborhood(form){
   });
   if(error)throw error;
   toast('Mahalleye katıldın');
-  await boot((await sb.auth.getSession()).data.session);
+  await openSitePicker(data,true);
 }
 
 async function joinNeighborhood(form){
-  const code=String(new FormData(form).get('code')).trim().toUpperCase(); const {error}=await sb.rpc('join_neighborhood',{p_invite_code:code});
-  if(error)throw error; toast('Mahalleye katıldın'); await boot((await sb.auth.getSession()).data.session);
+  const code=String(new FormData(form).get('code')).trim().toUpperCase(); const {data,error}=await sb.rpc('join_neighborhood',{p_invite_code:code});
+  if(error)throw error; toast('Mahalleye katıldın'); await openSitePicker(data,true);
+}
+
+async function getNeighborhoodSites(nid){
+  const {data,error}=await sb.from('residential_site_neighborhoods')
+    .select('site_id,residential_sites!site_id(id,name,brand)')
+    .eq('neighborhood_id',nid);
+  if(error)throw error;
+  return (data||[]).map(x=>x.residential_sites).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name,'tr'));
+}
+
+async function openSitePicker(nid,afterJoin=false){
+  sitePickerContext={nid,afterJoin};
+  const sites=await getNeighborhoodSites(nid);
+  open('Siteni Seç',`<div class="stack"><button class="setting-row" data-a="set-site" data-nid="${nid}" data-site=""><span>🏘️</span><span class="grow"><strong>Mahalle geneli</strong><small>Sitede oturmuyorum / site seçmek istemiyorum</small></span></button>${sites.map(x=>`<button class="setting-row" data-a="set-site" data-nid="${nid}" data-site="${x.id}"><span>🏢</span><span class="grow"><strong>${e(x.name)}</strong><small>${e(x.brand||'Konut sitesi')}</small></span></button>`).join('')}<button class="setting-row" data-a="suggest-site" data-nid="${nid}"><span>➕</span><span class="grow"><strong>Sitem listede yok</strong><small>Site adını doğrulama için gönder</small></span></button></div>`);
+}
+
+async function setSiteChoice(nid,siteId){
+  const {error}=await sb.rpc('set_membership_site',{p_neighborhood_id:nid,p_site_id:siteId||null});
+  if(error)throw error;
+  const after=sitePickerContext.afterJoin;
+  close();
+  await loadIdentity();
+  const membership=state.memberships.find(x=>x.neighborhood_id===nid);
+  if(membership)state.neighborhood=membership.neighborhoods;
+  if(after&&state.neighborhood){await loadAll();subscribeRealtime();go('feed');}
+  render(); toast(siteId?'Site seçildi':'Mahalle geneli seçildi');
+}
+
+function suggestSite(nid){
+  open('Sitem Listede Yok',`<form id="siteSuggestionForm" data-nid="${nid}" class="form-grid"><div class="field"><label>Site / Konut Projesi Adı</label><input name="name" required minlength="2" maxlength="160" placeholder="Örn. Avrupa Konutları Atakent"></div><small class="hint">Öneri doğrulandıktan sonra bu mahalledeki herkes için tek seçenek olarak yayınlanır.</small><div class="form-actions"><button type="button" class="secondary-btn" data-a="close">İptal</button><button class="primary-btn">Gönder</button></div></form>`);
+}
+
+async function submitSiteSuggestion(form){
+  const nid=form.dataset.nid,name=String(new FormData(form).get('name')||'').trim();
+  const {error}=await sb.from('site_suggestions').insert({user_id:state.user.id,neighborhood_id:nid,suggested_name:name});
+  if(error)throw error;
+  toast('Site önerisi doğrulamaya gönderildi');
+  await setSiteChoice(nid,null);
 }
 
 function card(x,kind,extra=''){
@@ -273,7 +312,7 @@ function recs(){app.innerHTML=head('Tavsiyeler','Komşuların deneyimlediği ust
 function more(){app.innerHTML=head('Daha Fazla','Komşum’un diğer bölümleri')+`<div class="grid-menu"><button class="menu-tile" data-go="lost"><span>🔎</span><strong>Kayıp & Buluntu</strong><small>Kayıp ve bulunan eşyalar</small></button><button class="menu-tile" data-go="recs"><span>⭐</span><strong>Tavsiyeler</strong><small>Usta ve işletme önerileri</small></button><button class="menu-tile" data-go="messages"><span>💬</span><strong>Mesajlar</strong><small>Komşularla özel görüşme</small></button><button class="menu-tile" data-go="profile"><span>👤</span><strong>Profil</strong><small>Hesap ve mahalle bilgileri</small></button></div>`}
 function profile(){
   const m=state.memberships.find(x=>x.neighborhood_id===state.neighborhood.id);
-  app.innerHTML=head('Profil','Hesabın ve mahalle üyeliğin')+`<div class="card profile-card"><div class="profile-avatar">${e((state.profile?.full_name||'K')[0])}</div><div><strong>${e(state.profile?.full_name||'Komşu')}</strong><div class="meta">${e(state.user.email||'')}</div></div></div><div class="card"><h3 class="card-title">${e(state.neighborhood.name)}</h3><div class="card-text">${e([state.neighborhood.district,state.neighborhood.city].filter(Boolean).join(' / '))}</div><div class="notice"><strong>Davet Kodu:</strong> ${e(state.neighborhood.invite_code)}</div><small class="hint">Bu kodu yalnız mahalleye davet etmek istediğin kişilerle paylaş.</small></div><div class="settings-list"><button class="setting-row" data-a="profile-edit"><span>✏️</span><span class="grow"><strong>Profili düzenle</strong><small>Ad ve telefon bilgisi</small></span></button><button class="setting-row" data-a="switch-neighborhood"><span>🏘️</span><span class="grow"><strong>Mahalle değiştir</strong><small>${state.memberships.length} üyelik · ${e(m?.role||'member')}</small></span></button><button class="setting-row" data-a="logout"><span>↪</span><span class="grow"><strong>Çıkış yap</strong><small>Bu cihazdaki oturumu kapat</small></span></button></div>`
+  app.innerHTML=head('Profil','Hesabın ve mahalle üyeliğin')+`<div class="card profile-card"><div class="profile-avatar">${e((state.profile?.full_name||'K')[0])}</div><div><strong>${e(state.profile?.full_name||'Komşu')}</strong><div class="meta">${e(state.user.email||'')}</div></div></div><div class="card"><h3 class="card-title">${e(state.neighborhood.name)}</h3><div class="card-text">${e([state.neighborhood.district,state.neighborhood.city].filter(Boolean).join(' / '))}</div><div class="notice"><strong>Davet Kodu:</strong> ${e(state.neighborhood.invite_code)}</div><small class="hint">Bu kodu yalnız mahalleye davet etmek istediğin kişilerle paylaş.</small><div class="notice"><strong>Site:</strong> ${e(m?.residential_sites?.name||'Mahalle geneli')}</div></div><div class="settings-list"><button class="setting-row" data-a="site-change"><span>🏢</span><span class="grow"><strong>Site / Konut projesi</strong><small>${e(m?.residential_sites?.name||'Mahalle geneli')}</small></span></button><button class="setting-row" data-a="profile-edit"><span>✏️</span><span class="grow"><strong>Profili düzenle</strong><small>Ad ve telefon bilgisi</small></span></button><button class="setting-row" data-a="switch-neighborhood"><span>🏘️</span><span class="grow"><strong>Mahalle değiştir</strong><small>${state.memberships.length} üyelik · ${e(m?.role||'member')}</small></span></button><button class="setting-row" data-a="logout"><span>↪</span><span class="grow"><strong>Çıkış yap</strong><small>Bu cihazdaki oturumu kapat</small></span></button></div>`
 }
 function messagesPage(){
   const convs=state.conversations.map(c=>{const members=state.conversationMembers.filter(m=>m.conversation_id===c.id);const other=members.find(m=>m.user_id!==state.user.id)?.profiles;const msgs=state.messages.filter(m=>m.conversation_id===c.id);const last=msgs[msgs.length-1];return {c,other,last};});
@@ -339,6 +378,7 @@ document.addEventListener('submit',ev=>{
   if(f.id==='entityForm')return safe(()=>saveEntity(f));
   if(f.id==='borrowForm')return safe(()=>submitBorrow(f));
   if(f.id==='profileForm')return safe(()=>saveProfile(f));
+  if(f.id==='siteSuggestionForm')return safe(()=>submitSiteSuggestion(f));
   if(f.id==='messageForm')return safe(()=>sendMessage(f));
 });
 document.addEventListener('click',ev=>{
@@ -349,6 +389,8 @@ document.addEventListener('click',ev=>{
   if(a==='new')return entityForm(el.dataset.k); if(a==='edit')return entityForm(el.dataset.k,el.dataset.id); if(a==='del')return safe(()=>deleteEntity(el.dataset.k,el.dataset.id));
   if(a==='request')return requestItem(el.dataset.id); if(a==='incoming')return incoming(); if(a==='borrow-status')return safe(()=>updateBorrow(el.dataset.id,el.dataset.status));
   if(a==='new-message')return newMessage(); if(a==='message-user')return safe(()=>startConversation(el.dataset.user)); if(a==='open-conv')return openConversation(el.dataset.id);
+  if(a==='set-site')return safe(()=>setSiteChoice(el.dataset.nid,el.dataset.site||null)); if(a==='suggest-site')return suggestSite(el.dataset.nid);
+  if(a==='site-change')return safe(()=>openSitePicker(state.neighborhood.id,false));
   if(a==='profile-edit')return profileEdit(); if(a==='switch-neighborhood')return switchNeighborhood(); if(a==='join-more')return joinMore(); if(a==='choose-neighborhood')return safe(()=>chooseNeighborhood(el.dataset.id));
   if(a==='logout')return safe(()=>sb.auth.signOut()); if(a==='retry')return safe(async()=>boot((await sb.auth.getSession()).data.session));
   if(a==='call'){const p=el.dataset.phone;if(p)location.href='tel:'+p.replace(/\s/g,'')}
