@@ -21,9 +21,23 @@ jobs:
       - name: Apply feature patch
         run: python3 tools/patch_features_v4.py
 
+      - name: Normalize patch boundaries
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/main/assets/app.js')
+          s=p.read_text()
+          s=s.replace('function statusTR\n\nfunction statusTR(v)', 'function statusTR(v)')
+          s=s.replace('function requestItem\n\nfunction requestItem(id)', 'function requestItem(id)')
+          s=s.replace('function profileEdit(){\n\nfunction profileEdit(){', 'function profileEdit(){')
+          s=s.replace('function profileEdit(){function profileEdit(){', 'function profileEdit(){')
+          p.write_text(s)
+          PY
+
       - name: Add feature styles
         run: |
-          cat >> app/src/main/assets/styles.css <<'CSS'
+          if ! grep -q "Komşum v4 feature styles" app/src/main/assets/styles.css; then
+            cat >> app/src/main/assets/styles.css <<'CSS'
 
           /* Komşum v4 feature styles */
           .content-photo{display:block;width:100%;max-height:360px;object-fit:cover;border-radius:14px;margin:10px 0 12px;background:var(--card,#fff)}
@@ -37,6 +51,7 @@ jobs:
           .setting-row .text-btn{white-space:nowrap}
           @media(max-width:520px){.setting-row{gap:9px}.setting-row .text-btn{font-size:11px;padding:6px}.content-photo{max-height:300px}}
           CSS
+          fi
 
       - name: Validate JavaScript
         run: node --check app/src/main/assets/app.js
