@@ -1,10 +1,9 @@
-const CACHE_NAME = 'komsum-pwa-v2.4.0';
+const CACHE_NAME = 'komsum-pwa-v2.5.0';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
   './app.js',
-  './location-selector.js',
   './manifest.webmanifest',
   './assets/icon-192.png',
   './assets/icon-512.png'
