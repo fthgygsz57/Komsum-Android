@@ -1,0 +1,98 @@
+from pathlib import Path
+
+p=Path('app/src/main/assets/app.js')
+s=p.read_text()
+
+if 'sitePickerContext' not in s:
+    s=s.replace("let booting=false;", "let booting=false;\nlet sitePickerContext={nid:null,afterJoin:false};")
+
+s=s.replace("select('neighborhood_id,role,joined_at,neighborhoods(id,name,city,district,invite_code)')", "select('neighborhood_id,role,joined_at,site_id,residential_sites!site_id(id,name,brand),neighborhoods(id,name,city,district,invite_code)')")
+
+old="""  const {error}=await sb.rpc('join_neighborhood_by_ptt',{
+    p_il_id:city.value,
+    p_il_name:city.dataset.name,
+    p_ilce_id:district.value,
+    p_ilce_name:district.dataset.name,
+    p_mahalle_id:neighborhood.value,
+    p_mahalle_name:neighborhood.dataset.name,
+    p_posta_kodu:neighborhood.dataset.postal||null
+  });
+  if(error)throw error;
+  toast('Mahalleye katıldın');
+  await boot((await sb.auth.getSession()).data.session);"""
+new="""  const {data,error}=await sb.rpc('join_neighborhood_by_ptt',{
+    p_il_id:city.value,
+    p_il_name:city.dataset.name,
+    p_ilce_id:district.value,
+    p_ilce_name:district.dataset.name,
+    p_mahalle_id:neighborhood.value,
+    p_mahalle_name:neighborhood.dataset.name,
+    p_posta_kodu:neighborhood.dataset.postal||null
+  });
+  if(error)throw error;
+  toast('Mahalleye katıldın');
+  await openSitePicker(data,true);"""
+if old in s:
+    s=s.replace(old,new)
+
+anchor="""async function joinNeighborhood(form){
+  const code=String(new FormData(form).get('code')).trim().toUpperCase(); const {error}=await sb.rpc('join_neighborhood',{p_invite_code:code});
+  if(error)throw error; toast('Mahalleye katıldın'); await boot((await sb.auth.getSession()).data.session);
+}
+
+function card"""
+replacement="""async function joinNeighborhood(form){
+  const code=String(new FormData(form).get('code')).trim().toUpperCase(); const {data,error}=await sb.rpc('join_neighborhood',{p_invite_code:code});
+  if(error)throw error; toast('Mahalleye katıldın'); await openSitePicker(data,true);
+}
+
+async function getNeighborhoodSites(nid){
+  const {data,error}=await sb.from('residential_site_neighborhoods')
+    .select('site_id,residential_sites!site_id(id,name,brand)')
+    .eq('neighborhood_id',nid);
+  if(error)throw error;
+  return (data||[]).map(x=>x.residential_sites).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name,'tr'));
+}
+
+async function openSitePicker(nid,afterJoin=false){
+  sitePickerContext={nid,afterJoin};
+  const sites=await getNeighborhoodSites(nid);
+  open('Siteni Seç',`<div class="stack"><button class="setting-row" data-a="set-site" data-nid="${nid}" data-site=""><span>🏘️</span><span class="grow"><strong>Mahalle geneli</strong><small>Sitede oturmuyorum / site seçmek istemiyorum</small></span></button>${sites.map(x=>`<button class="setting-row" data-a="set-site" data-nid="${nid}" data-site="${x.id}"><span>🏢</span><span class="grow"><strong>${e(x.name)}</strong><small>${e(x.brand||'Konut sitesi')}</small></span></button>`).join('')}<button class="setting-row" data-a="suggest-site" data-nid="${nid}"><span>➕</span><span class="grow"><strong>Sitem listede yok</strong><small>Site adını doğrulama için gönder</small></span></button></div>`);
+}
+
+async function setSiteChoice(nid,siteId){
+  const {error}=await sb.rpc('set_membership_site',{p_neighborhood_id:nid,p_site_id:siteId||null});
+  if(error)throw error;
+  const after=sitePickerContext.afterJoin;
+  close();
+  await loadIdentity();
+  const membership=state.memberships.find(x=>x.neighborhood_id===nid);
+  if(membership)state.neighborhood=membership.neighborhoods;
+  if(after&&state.neighborhood){await loadAll();subscribeRealtime();go('feed');}
+  render(); toast(siteId?'Site seçildi':'Mahalle geneli seçildi');
+}
+
+function suggestSite(nid){
+  open('Sitem Listede Yok',`<form id="siteSuggestionForm" data-nid="${nid}" class="form-grid"><div class="field"><label>Site / Konut Projesi Adı</label><input name="name" required minlength="2" maxlength="160" placeholder="Örn. Avrupa Konutları Atakent"></div><small class="hint">Öneri doğrulandıktan sonra bu mahalledeki herkes için tek seçenek olarak yayınlanır.</small><div class="form-actions"><button type="button" class="secondary-btn" data-a="close">İptal</button><button class="primary-btn">Gönder</button></div></form>`);
+}
+
+async function submitSiteSuggestion(form){
+  const nid=form.dataset.nid,name=String(new FormData(form).get('name')||'').trim();
+  const {error}=await sb.from('site_suggestions').insert({user_id:state.user.id,neighborhood_id:nid,suggested_name:name});
+  if(error)throw error;
+  toast('Site önerisi doğrulamaya gönderildi');
+  await setSiteChoice(nid,null);
+}
+
+function card"""
+if anchor in s:
+    s=s.replace(anchor,replacement)
+
+s=s.replace("<small class=\"hint\">Bu kodu yalnız mahalleye davet etmek istediğin kişilerle paylaş.</small></div><div class=\"settings-list\">", "<small class=\"hint\">Bu kodu yalnız mahalleye davet etmek istediğin kişilerle paylaş.</small><div class=\"notice\"><strong>Site:</strong> ${e(m?.residential_sites?.name||'Mahalle geneli')}</div></div><div class=\"settings-list\"><button class=\"setting-row\" data-a=\"site-change\"><span>🏢</span><span class=\"grow\"><strong>Site / Konut projesi</strong><small>${e(m?.residential_sites?.name||'Mahalle geneli')}</small></span></button>")
+
+if "if(f.id==='siteSuggestionForm')" not in s:
+    s=s.replace("  if(f.id==='profileForm')return safe(()=>saveProfile(f));", "  if(f.id==='profileForm')return safe(()=>saveProfile(f));\n  if(f.id==='siteSuggestionForm')return safe(()=>submitSiteSuggestion(f));")
+if "if(a==='set-site')" not in s:
+    s=s.replace("  if(a==='profile-edit')return profileEdit();", "  if(a==='set-site')return safe(()=>setSiteChoice(el.dataset.nid,el.dataset.site||null)); if(a==='suggest-site')return suggestSite(el.dataset.nid);\n  if(a==='site-change')return safe(()=>openSitePicker(state.neighborhood.id,false));\n  if(a==='profile-edit')return profileEdit();")
+
+p.write_text(s)
