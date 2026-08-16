@@ -22,3 +22,15 @@
 .toast-root{position:fixed;z-index:200;left:14px;right:14px;bottom:calc(82px + var(--safe-bottom));display:grid;justify-items:center;pointer-events:none}.toast{background:var(--ink);color:var(--card);padding:10px 13px;border-radius:12px;box-shadow:var(--shadow);font-size:12px;font-weight:700;animation:toastIn .2s ease-out}.toast.error{background:var(--danger);color:white}@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .install-banner{border:1px solid color-mix(in srgb,var(--primary) 30%,var(--line));background:linear-gradient(135deg,var(--primary-soft),var(--card));border-radius:18px;padding:14px}.install-banner strong{font-size:14px}.install-banner p{font-size:11px;color:var(--muted);line-height:1.4;margin:4px 0 10px}
 @media(min-width:760px){.app-main{padding-left:18px;padding-right:18px}.bottom-nav{left:50%;right:auto;width:540px;transform:translateX(-50%);border:1px solid var(--line);border-bottom:0;border-radius:20px 20px 0 0}.fab{right:calc(50% - 340px)}.modal-root{align-items:center;padding:20px}.modal{border-radius:24px;max-height:88dvh;padding-bottom:20px}.grid-menu{grid-template-columns:repeat(3,1fr)}}
+
+/* Komşum v4 feature styles */
+.content-photo{display:block;width:100%;max-height:360px;object-fit:cover;border-radius:14px;margin:10px 0 12px;background:var(--card,#fff)}
+.form-photo{display:block;width:100%;max-height:230px;object-fit:cover;border-radius:12px;margin:8px 0}
+.check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin:8px 0}
+.count-pill{display:inline-flex;min-width:20px;height:20px;padding:0 6px;align-items:center;justify-content:center;border-radius:999px;background:#346B4A;color:#fff;font-size:11px;line-height:1}
+.unread-row{font-weight:600;background:rgba(52,107,74,.06)}
+.unread-dot{display:block;width:9px;height:9px;border-radius:50%;background:#346B4A;flex:0 0 auto}
+.chat-stack{max-height:52vh;overflow:auto;padding-right:2px}
+.danger-btn{background:#9f2f2f!important;border-color:#9f2f2f!important;color:#fff!important}
+.setting-row .text-btn{white-space:nowrap}
+@media(max-width:520px){.setting-row{gap:9px}.setting-row .text-btn{font-size:11px;padding:6px}.content-photo{max-height:300px}}
