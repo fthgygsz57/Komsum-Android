@@ -34,6 +34,7 @@ jobs:
           cp app/src/main/assets/index.html _site/index.html
           cp app/src/main/assets/styles.css _site/styles.css
           cp app/src/main/assets/app.js _site/app.js
+          cp app/src/main/assets/location-selector.js _site/location-selector.js
           cp pwa/manifest.webmanifest _site/manifest.webmanifest
           cp pwa/sw.js _site/sw.js
           base64 -d pwa/icon-512.png.b64 > _site/assets/icon-512.png
